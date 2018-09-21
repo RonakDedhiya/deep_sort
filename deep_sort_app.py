@@ -12,6 +12,7 @@ from application_util import visualization
 from deep_sort import nn_matching
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
+import natsort
 
 
 def gather_sequence_info(sequence_dir, detection_file):
@@ -42,8 +43,8 @@ def gather_sequence_info(sequence_dir, detection_file):
     """
     image_dir = os.path.join(sequence_dir, "img1")
     image_filenames = {
-        int(os.path.splitext(f)[0]): os.path.join(image_dir, f)
-        for f in os.listdir(image_dir)}
+        int(os.path.splitext(f)[0][3:]): os.path.join(image_dir, f)
+        for f in natsort.natsorted(os.listdir(image_dir))}
     groundtruth_file = os.path.join(sequence_dir, "gt/gt.txt")
 
     detections = None
@@ -116,7 +117,6 @@ def create_detections(detection_mat, frame_idx, min_height=0):
     """
     frame_indices = detection_mat[:, 0].astype(np.int)
     mask = frame_indices == frame_idx
-
     detection_list = []
     for row in detection_mat[mask]:
         bbox, confidence, feature = row[2:6], row[6], row[10:]
@@ -164,11 +164,11 @@ def run(sequence_dir, detection_file, output_file, min_confidence,
     results = []
 
     def frame_callback(vis, frame_idx):
+        global frameNumber
         print("Processing frame %05d" % frame_idx)
-
         # Load image and generate detections.
         detections = create_detections(
-            seq_info["detections"], frame_idx, min_detection_height)
+            seq_info["detections"], frameNumber, min_detection_height)
         detections = [d for d in detections if d.confidence >= min_confidence]
 
         # Run non-maxima suppression.
@@ -181,7 +181,7 @@ def run(sequence_dir, detection_file, output_file, min_confidence,
         # Update tracker.
         tracker.predict()
         tracker.update(detections)
-
+        # print(detectionsy)
         # Update visualization.
         if display:
             image = cv2.imread(
@@ -196,8 +196,9 @@ def run(sequence_dir, detection_file, output_file, min_confidence,
                 continue
             bbox = track.to_tlwh()
             results.append([
-                frame_idx, track.track_id, bbox[0], bbox[1], bbox[2], bbox[3]])
+                frameNumber, track.track_id, bbox[0], bbox[1], bbox[2], bbox[3]])
 
+        frameNumber = frameNumber + 1
     # Run tracker.
     if display:
         visualizer = visualization.Visualization(seq_info, update_ms=5)
@@ -251,6 +252,8 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+    frameNumber = 1
+
     run(
         args.sequence_dir, args.detection_file, args.output_file,
         args.min_confidence, args.nms_max_overlap, args.min_detection_height,

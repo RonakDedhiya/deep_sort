@@ -5,6 +5,7 @@ import argparse
 import numpy as np
 import cv2
 import tensorflow as tf
+import natsort
 
 
 def _run_in_batches(f, data_dict, out, batch_size):
@@ -150,9 +151,7 @@ def generate_detections(encoder, mot_dir, output_dir, detection_dir=None):
         sequence_dir = os.path.join(mot_dir, sequence)
 
         image_dir = os.path.join(sequence_dir, "img1")
-        image_filenames = {
-            int(os.path.splitext(f)[0]): os.path.join(image_dir, f)
-            for f in os.listdir(image_dir)}
+        image_filenames = [ os.path.join(image_dir, f) for f in natsort.natsorted(os.listdir(image_dir)) ]
 
         detection_file = os.path.join(
             detection_dir, sequence, "det/det.txt")
@@ -166,15 +165,15 @@ def generate_detections(encoder, mot_dir, output_dir, detection_dir=None):
             print("Frame %05d/%05d" % (frame_idx, max_frame_idx))
             mask = frame_indices == frame_idx
             rows = detections_in[mask]
-
-            if frame_idx not in image_filenames:
-                print("WARNING could not find image for frame %d" % frame_idx)
-                continue
-            bgr_image = cv2.imread(
-                image_filenames[frame_idx], cv2.IMREAD_COLOR)
-            features = encoder(bgr_image, rows[:, 2:6].copy())
-            detections_out += [np.r_[(row, feature)] for row, feature
-                               in zip(rows, features)]
+            if (rows[0,2] != 0):
+                # if frame_idx not in image_filenames:
+                    # print("WARNING could not find image for frame %d" % frame_idx)
+                    # continue
+                bgr_image = cv2.imread(
+                    image_filenames[frame_idx], cv2.IMREAD_COLOR)
+                features = encoder(bgr_image, rows[:, 2:6].copy())
+                detections_out += [np.r_[(row, feature)] for row, feature
+                                   in zip(rows, features)]
 
         output_filename = os.path.join(output_dir, "%s.npy" % sequence)
         np.save(
